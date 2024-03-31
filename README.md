@@ -36,6 +36,8 @@ git clone https://github.com/pedro-design/lite-xl-CodeCompletion-plugin.git
 2. copy the Json lib for lua to the ./config dir of lite-xl
    
 3. Restart the editor.
+   
+5. Check if curl is intalled
 
 ## Configuration
 
