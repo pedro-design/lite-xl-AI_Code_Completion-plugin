@@ -1,4 +1,3 @@
--- mod-version:3
 -- json.lua
 --
 -- Copyright (c) 2019 rxi
