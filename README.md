@@ -33,8 +33,9 @@ To install the **CodeCompletion** plugin, follow these steps:
 ```bash
 git clone https://github.com/pedro-design/lite-xl-CodeCompletion-plugin.git
 ```
-
-2. Restart the editor.
+2. copy the Json lib for lua to the ./config dir of lite-xl
+   
+3. Restart the editor.
 
 ## Configuration
 
