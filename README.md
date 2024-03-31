@@ -41,7 +41,7 @@ git clone https://github.com/pedro-design/lite-xl-CodeCompletion-plugin.git
 The plugin can be configured via the settings GUI. The following configuration options are available:
 
 - `api_key`: Your API key for accessing the llama.cpp server (if used).
-- `model`: The name of the OpenAI model to use.
+- `model`: The name of the model to use.
 - `n_predict`: Number of tokens to generate.
 - `temperature`: Sampling temperature.
 - `mirostat`: Use mirostat (0 for no, 1 and 2 for its versions).
