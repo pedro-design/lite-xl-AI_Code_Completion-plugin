@@ -213,10 +213,15 @@ local function complete_code(prompt,dv,n,ncalls,callback_func)
       -- Parse the completion from the response
       local ok,res = pcall(function()  local result = json.decode(completion)  end)
       if not ok then
+        if completion then
+          core.log(completion)
+        end
         core.error("Json cant be parsed, its the endpoint reacheable?")
+        
         core.status_view:get_item("ai-generation:working"):hide() 
         return nil
       end
+      local result = json.decode(completion)
       if result and result.content then
         -- Call the callback with the completion result
       local match = string.match(result["content"], "\n")
