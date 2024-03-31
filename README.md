@@ -1,4 +1,4 @@
-# CodeCompletion Plugin
+# Code Completion Plugin
 
 This plugin enables code completion using the llama.cpp server and provides basic functionality for triggering code completion and receiving suggestions.
 
