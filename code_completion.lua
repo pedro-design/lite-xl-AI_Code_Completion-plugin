@@ -19,7 +19,6 @@ local command = require "core.command"
 local config = require "core.config"
 local style = require "core.style"
 local RootView = require "core.rootview"
-local www = require "libraries.www"
 -- the "keymap" module will allow us to set keybindings for our commands
 local keymap = require "core.keymap"
 local json = require "json"
@@ -147,6 +146,101 @@ if not loaded then
 else
     pcall(function() core.status_view:get_item("ai-generation:working"):hide() end) --if the status is loaded, just hide it
 end
+
+--micro match func
+local function findWordStartIndex(str, word)
+    local wordStartIndex = nil
+    local wordLen = #word
+    local strLen = #str
+    --core.log(wordLen)
+  --  core.log(strLen)
+
+    for i = 1, strLen - wordLen + 1 do
+        local isWordStart = true
+        -- core.log( str:sub(i, i + wordLen - 1))
+      --  core.log(word)
+        -- Check if substring matches the word
+        if str:sub(i, i + wordLen - 1) == word then
+           
+            -- Check if it's at the beginning of the string or preceded by a space
+            wordStartIndex = i
+            if i == 1 or str:sub(i - 1, i - 1) == " " then
+                -- Check if it's followed by a space or punctuation or it's the end of the string
+                if i + wordLen - 1 == strLen or str:sub(i + wordLen, i + wordLen):match("[%s%p]") then
+                    wordStartIndex = i
+                    break
+                end
+            end
+        end
+    end
+
+    return wordStartIndex
+end
+
+local function decodeUTF8(str)
+    local decoded = ""
+    local i = 1
+
+    while i <= #str do
+        local char = str:sub(i, i)
+
+        if char == "\\" then
+            local nextChar = str:sub(i + 1, i + 1)
+            if nextChar == "n" then
+                decoded = decoded .. "\n"
+                i = i + 2  -- Skip over the "n" character
+            elseif nextChar == "t" then
+                decoded = decoded .. "\t"
+                i = i + 2  -- Skip over the "t" character
+            else
+                -- If the next character is not part of an escaped sequence, append "\" to the decoded string
+                decoded = decoded .. "\\"
+                i = i + 1
+            end
+        else
+            decoded = decoded .. char
+            i = i + 1
+        end
+    end
+
+    return decoded
+end
+
+
+local function separateLines(str)
+    local lines = {}
+    local startIndex = 1  -- Start index of the current line
+    str = decodeUTF8(str)
+   -- core.log(str)
+    for i = 1, #str-1 do
+        local char = str:sub(i, i)
+       -- core.log(char)
+   --     if char =='\n' then
+     --     core.log("new line")
+       -- end
+        if char == "\n" or char == "\r" then
+            -- Check if the next character is '\r' to detect '\n\r' sequence
+            if char == "\n" and i < #str and str:sub(i + 1, i + 1) == "\r" then
+                -- Move the index one step further for CR-LF sequence
+                i = i + 1
+            end
+            -- Slice the string from the startIndex to the current index
+            table.insert(lines, str:sub(startIndex, i - 1))
+       --     core.log(str:sub(startIndex, i - 1))
+            startIndex = i + 1  -- Update the startIndex to the next character after the newline sequence
+        end
+    end
+    
+    -- Add the last line if it's not empty
+    if startIndex <= #str then
+        table.insert(lines, str:sub(startIndex))
+    end
+    
+    return lines
+end
+
+
+
 -- Function to complete code using an OpenAI API and calling curl
 local function complete_code(prompt,dv,n,ncalls,callback_func)
   if callback_func==nil then core.error("Pass a callback function") end
@@ -162,8 +256,8 @@ local function complete_code(prompt,dv,n,ncalls,callback_func)
   generating = true
   info_text = string.format("%d of %d completed",0,ncalls)
   core.add_thread(function()
+    core.status_view:get_item("ai-generation:working"):show()
     for call = 1, ncalls, 1 do --perform the completions 1 by 1 at the time
-      core.status_view:get_item("ai-generation:working"):show()
       generating = true
 
       
@@ -173,7 +267,7 @@ local function complete_code(prompt,dv,n,ncalls,callback_func)
         "-X",
         "POST",
         "--max-time",
-        "180",
+        "1800",
         "-H",
         "Content-Type: application/json",
         "-H",
@@ -210,11 +304,29 @@ local function complete_code(prompt,dv,n,ncalls,callback_func)
         coroutine.yield(0.1)
       end
 
+      
+        
+    
+      
       -- Parse the completion from the response
       local ok,res = pcall(function()  local result = json.decode(completion)  end)
       if not ok then
         if completion then
-          core.log(completion)
+         -- core.log(completion)
+          local completion_C = string.sub(completion, 13,-1)
+          local end_completion=findWordStartIndex(completion_C,"generation_settings")-- hardcoded match TODO: add dinamic lookup
+          
+          completion_C = string.sub(completion, 13, end_completion)
+          callback_func(completion_C,dv)
+          callback_func("\n\n",dv)
+          core.log(completion_C)
+          local lines = separateLines(completion_C)
+          for i, line in ipairs(lines) do
+              callback_func(line,dv)
+              coroutine.yield(0.1)
+          end
+          coroutine.yield(0.1)
+          
         end
         core.error("Json cant be parsed, its the endpoint reacheable?")
         
@@ -228,26 +340,23 @@ local function complete_code(prompt,dv,n,ncalls,callback_func)
       if ncalls>1 then -- if sugestions are to be generated
         callback_func("sugestion_".. tostring(call)..":\n",dv)
       end
-      if match then
-        for line in result["content"]:gmatch("[^\n]+") do --parse new lines in response
-            callback_func(line,dv)
-            coroutine.yield(0.1)
-          end
-      else
-            callback_func(result["content"],dv) -- just return all the response if not a single new line
-            coroutine.yield(0.1)
+      local lines = separateLines(result["content"])
+      for i, line in ipairs(lines) do
+          callback_func(line,dv)
+          coroutine.yield(0.1)
       end
       info_text = string.format("%d of %d completed",call,ncalls) -- info update
       command.perform("doc:move-to-end-of-line") -- move to end of line
-      core.status_view:get_item("ai-generation:working"):hide() 
+     -- core.status_view:get_item("ai-generation:working"):hide() 
       generating=false
       else
         info_text = string.format("%d of %d completed",call,ncalls)  -- info update
         core.error("Failed to complete code")--logs
-        core.status_view:get_item("ai-generation:working"):hide()
+        
         generating=false
       end
     end
+    core.status_view:get_item("ai-generation:working"):hide()
   end)
 end
 
